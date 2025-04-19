@@ -4,6 +4,7 @@
 
 import numpy as np
 from scipy.integrate import solve_ivp 
+from scipy.optimize import fsolve 
 from scipy import interpolate
 import matplotlib.pyplot as plt
 
@@ -183,7 +184,7 @@ reltol = 1e-8
 solver = 'LSODA'
 dt = 0.1
 
-def fun(t,T,inputs):
+def fun_transient(t,T,inputs):
     q,C,K,H,B,T0,Tf = inputs.values()
 
     T4 = T**4
@@ -191,24 +192,57 @@ def fun(t,T,inputs):
     dTdt = np.linalg.inv(-C) @ (q + K@T + H@T4 + B@np.array([T0,T0**4,Tf]))
     return dTdt
 
-#%% Solve 
+#%% Solve Transient System
 
-sol = solve_ivp(fun, [0, Tmax], max_step=dt, args=(sim_inputs,), y0=init_conds, rtol=reltol, method=solver)
+sol = solve_ivp(fun_transient, [0, Tmax], max_step=dt, args=(sim_inputs,), y0=init_conds, rtol=reltol, method=solver)
 
+#Calculate transient heat flows from T1
 q_in = ((T0 - sol.y[0]) * K_vect[0]) +  ((T0**4 - sol.y[0]**4) * H_vect[0])
 q_loss = (sol.y[0] - Tf) * Kf_vect[0]
 q_next = ((sol.y[0] - sol.y[1]) * K_vect[1]) +  ((sol.y[0]**4 - sol.y[1]**4) * H_vect[1])
 q_store = -C_vect[0] * np.gradient(sol.y[0])/np.gradient(sol.t)
 
+#%% Steady State Solution
+
+def fun_steadystate(T,inputs):
+    q,C,K,H,B,T0,Tf = inputs.values()
+
+    T4 = T**4
+    
+    err = np.linalg.inv(-C) @ (q + K@T + H@T4 + B@np.array([T0,T0**4,Tf]))
+    return err
+
+#%% Solve Steady-State System 
+
+T_ss = fsolve(fun_steadystate, x0 = init_conds, args=(sim_inputs,))
+
+#Calculate steady state flows from T1
+q_in = ((T0 - T_ss[0]) * K_vect[0]) +  ((T0**4 - T_ss[0]**4) * H_vect[0])
+q_loss = (T_ss[0] - Tf) * Kf_vect[0]
+q_next = ((T_ss[0] - T_ss[1]) * K_vect[1]) +  ((T_ss[0]**4 - T_ss[1]**4) * H_vect[1])
+
+print("Steady-state heat flow:")
+print(f"Conduction = {q_loss:.2f} [W], {100*q_loss/q_in:.2f}%")
+print(f"Radiation = {q_next:.2f} [W], {100*q_next/q_in:.2f}%")
+
 #%% Visualization
+
+colors = ["indigo", "blue", "green", "orange", "red"]
 
 fig, ax = plt.subplots(3, 1, sharex=True)
 p = 0
-ax[p].plot(sol.t, sol.y[0], label='T1')
-ax[p].plot(sol.t, sol.y[1], label='T2')
-ax[p].plot(sol.t, sol.y[2], label='T3')
-ax[p].plot(sol.t, sol.y[3], label='T4')
-ax[p].plot(sol.t, sol.y[4], label='T5')
+ax[p].plot(sol.t, sol.y[0], color=colors[0], label='T1')
+ax[p].plot(sol.t, sol.y[1], color=colors[1], label='T2')
+ax[p].plot(sol.t, sol.y[2], color=colors[2], label='T3')
+ax[p].plot(sol.t, sol.y[3], color=colors[3], label='T4')
+ax[p].plot(sol.t, sol.y[4], color=colors[4], label='T5')
+
+ax[p].axhline(y=T_ss[0], color=colors[0], linestyle="--", label='T1 SS')
+ax[p].axhline(y=T_ss[1], color=colors[1], linestyle="--", label='T1 SS')
+ax[p].axhline(y=T_ss[2], color=colors[2], linestyle="--", label='T1 SS')
+ax[p].axhline(y=T_ss[3], color=colors[3], linestyle="--", label='T1 SS')
+ax[p].axhline(y=T_ss[4], color=colors[4], linestyle="--", label='T1 SS')
+
 ax[p].grid('enable')
 ax[p].set_ylabel('Temperature [K]')
 ax[p].legend()
@@ -225,29 +259,5 @@ ax[p].legend()
 p = 2
 ax[p].plot(sol.t, q_in - q_loss - q_next - q_store)
 ax[p].grid('enable')
-ax[p].set_ylabel('Heat Balance [W]')
+ax[p].set_ylabel('T1 Heat Balance [W]')
 ax[p].set_xlabel('Time [s]')
-
-#%% Check heat flow balance
-q0 = (sol.y[3] - sol.y[4]) * K_vect[4]          #Conduction in
-q1 = (sol.y[3]**4 - sol.y[4]**4) * H_vect[4]    #Radiation in
-q2 = (sol.y[4] - Tf) * Kf_vect[4]               #Conduction out
-q3 = C_vect[4] * np.gradient(sol.y[4])          #Storage out
-
-fig, ax = plt.subplots(2, 1, sharex=True)
-p = 0
-ax[p].plot(sol.t, q0, label='q0')
-ax[p].plot(sol.t, q1, label='q1')
-ax[p].plot(sol.t, q0 + q1, label='q_in')
-ax[p].plot(sol.t, q2, label='q2')
-ax[p].plot(sol.t, q3, label='q3')
-
-ax[p].grid('enable')
-ax[p].set_ylabel('Heat Flow [W]')
-ax[p].legend()
-
-p = 1
-ax[p].plot(sol.t, q0 + q1 - q2 - q3, label='Error')
-ax[p].grid('enable')
-ax[p].set_ylabel('Erroneous Heat Flow [W]')
-#ax[p].legend()
