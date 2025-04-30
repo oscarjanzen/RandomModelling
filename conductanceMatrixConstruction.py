@@ -11,10 +11,10 @@ import matplotlib.pyplot as plt
 
 #Declare Minimal Conductance Matrix
 A = np.array([[0,  1,  2,  3,  4],
-              [0, 11, 12, 13, 14],
-              [0,  0, 22, 23, 24],
-              [0,  0,  0, 33, 34],
-              [0,  0,  0,  0, 44]])
+              [0,  0, 12, 13, 14],
+              [0,  0,  0, 23, 24],
+              [0,  0,  0,  0, 34],
+              [0,  0,  0,  0,  0]])
 
 #Declare inputList, get stateList
 nodeList = np.arange(0,np.size(A,axis=0),1)
@@ -26,9 +26,9 @@ print(inputList)
 print(stateList)
 
 #Construct K_global, the global conductance matrix
-diagK = np.sum(A,1)
+diagK = np.sum(np.triu(A,k=1) + np.transpose(np.triu(A,k=1)),1)
 
-K_global = np.triu(A,k=1) + np.transpose(np.triu(A,k=1)) + np.diag(diagK)
+K_global = np.triu(A,k=1) + np.transpose(np.triu(A,k=1)) - np.diag(diagK)
 
 print(K_global)
 
@@ -70,26 +70,42 @@ def K_B_Constructor(A,inputList):
     #Size of inputList must be between 0 and size(A)-1
     
     #Construct K_global, the global conductance matrix
-    diagK = np.sum(A,1)
+    diagK = np.sum(np.triu(A,k=1) + np.transpose(np.triu(A,k=1)),1)
     K_global = np.triu(A,k=1) + np.transpose(np.triu(A,k=1)) - np.diag(diagK)
     
     #Create stateList and inputList
     nodeList = np.arange(0,np.size(K_global,axis=0),1)
     stateBool = np.ones_like(nodeList,dtype=bool)
-    stateBool[inputList] = False
-    stateList = nodeList[stateBool]
+    
+    if inputList.size != 0:
+        stateBool[inputList] = False
+        stateList = nodeList[stateBool]
+    else:
+        stateList = nodeList
     
     #Construct K
     K = K_global[np.ix_(stateList,stateList)]
     
     #Construct B
-    B = K_global[np.ix_(stateList,inputList)]
+    if inputList.size != 0:
+        B = K_global[np.ix_(stateList,inputList)]
+    else:
+        B = np.array([])
     
     return K,B
 
 K,B = K_B_Constructor(A,inputList)
 print(K)
 print(B)
+
+#%% Example Use, no inputs
+A = np.diag(np.array([1,2,3,4]),1)
+inputList = np.array([])
+
+K,B = K_B_Constructor(A,inputList)
+print(K)
+print(B)
+
 
 #%% Example use
 # 5 nodes across, 2 high, lower row and top left node are inputs
