@@ -1,0 +1,136 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath}
+\usepackage{fullpage}
+\usepackage{graphicx}
+\graphicspath{{./LaTeX Images/}}
+
+\begin{document}
+\title{Equations for Modelling Introduction}
+\author{Oscar Janzen}
+\date{November 30, 2025}
+\maketitle
+
+
+\tableofcontents
+
+\section{Example 0}
+Fill
+
+\subsection{Simple Network}
+Let's say we want to find the voltage $V_1$ at node \texttt{n1} in Figure 1. 
+
+\begin{figure}[h!]
+	\centering
+	\includegraphics[width=0.9\linewidth]{ResistorNetwork_1.png}
+  	\caption{Simple resistor network.}
+  	\label{fig:ResistorNetwork_1}
+\end{figure}
+
+We can simply combine resistors \texttt{R0} and \texttt{R1}, and \texttt{R2} and \texttt{R3}.
+
+\begin{align}
+R_0||R_1 &= R_{01} \\
+R_{01} &= \left( \left( R_0^{-1} \right) + \left( R_1^{-1} \right) \right)^{-1} \\
+       &= (1+1)^{-1} \\
+       &= 0.5
+\end{align}
+
+The same process applies for calculating $R_{23}$. Then we use the voltage divider equation:
+
+\begin{align}
+V_{out}	&= \frac{R_{23}}{R_{01} + R_{23}} \cdot V_1 \\
+		&= \frac{0.5}{0.5+0.5} \cdot 1 \\
+		&= 0.5
+\end{align}
+
+Alternatively, we can construct a system of equations (overkill, I know...) and solve the system to calculate $V_1$. We would do this by creating current balance equations for each of the nodes. This document will use the following sign convention: conventional current flowing into a node is \textbf{positive} and conventional current flowing out of a node is \textbf{negative}. Another note on notation: the voltage at \texttt{n0} is $V_0$, \texttt{n1} is $V_1$, and so on. Also, current flowing out of the voltage source is $I_{in}$, and current flowing into the ground node is $I_{out}$. 
+Using the constitutive equation for a resistor, the current flowing through \texttt{R0} from node \texttt{n0} to \texttt{n1} would be $I_0 = \frac{V_0-V_1}{R_0}$. Thus, the current balance for all three nodes would be:
+
+\begin{align}
+0 &= I_{in} - \frac{V_0-V_1}{R_0} - \frac{V_0-V_1}{R_1} \tag{node 0}\\
+0 &= \frac{V_0-V_1}{R_0} + \frac{V_0-V_1}{R_1} - \frac{V_1-V_2}{R_2} - \frac{V_1-V_2}{R_3} \tag{node 1} \\
+0 &= \frac{V_1-V_2}{R_2} + \frac{V_1-V_2}{R_3} - I_{out} \tag{node 2} \\
+\end{align}
+
+This can be rearranged and simplified:
+
+\begin{align}
+0 &= I_{in} + \left(-\frac{1}{R_0} - \frac{1}{R_1} \right)V_0 + \left(\frac{1}{R_0} + \frac{1}{R_1} \right)V_1 \tag{node 0}\\
+0 &= \left(\frac{1}{R_0} + \frac{1}{R_1} \right)V_0 + \left(-\frac{1}{R_0} - \frac{1}{R_1} - \frac{1}{R_2} - \frac{1}{R_3}\right)V_1 + \left(\frac{1}{R_2} + \frac{1}{R_3} \right)V_2 \tag{node 1} \\
+0 &= \left(\frac{1}{R_2} + \frac{1}{R_3} \right)V_1 + \left(-\frac{1}{R_2} - \frac{1}{R_3} \right)V_2 - I_{out} \tag{node 2}\\
+\end{align}
+
+If we want to use a non-linear solver like \texttt{scipy.optimize.fsolve}, we are done and would represent these equations in code as shown above. Since \texttt{fsolve} is a root finding function, it will find values of the input variables that make the LHS of the equations zero. Since $V_2$ and $I_{in}$ are boundary conditions (i.e. we know $V_2=0$ since it is the ground node, and $I_{in}=1$ since it is coming from the current source), these are passed to \texttt{fsolve} along with the resistor values. Note that an initial guess, \texttt{x0}, must be given to \texttt{fsolve}.
+
+Alternatively we could represent this system of equations in matrix form, which allows us to use linear algebra methods. Using linear algebra methods is usually faster and more accurate. To do so, we must rearrange further to move the boundary conditions to the left hand side of the equation. The goal is to represent the equations in the form $b = \textbf{A} \cdot x$
+
+\begin{align}
+-I_{in} &= \left(-\frac{1}{R_0} - \frac{1}{R_1} \right)V_0 + \left(\frac{1}{R_0} + \frac{1}{R_1} \right)V_1 \tag{node 0}\\
+\left(-\frac{1}{R_2} - \frac{1}{R_3} \right)V_2 &= \left(\frac{1}{R_0} + \frac{1}{R_1} \right)V_0 + \left(-\frac{1}{R_0} - \frac{1}{R_1} - \frac{1}{R_2} - \frac{1}{R_3}\right)V_1  \tag{node 1} \\
+\left(\frac{1}{R_2} + \frac{1}{R_3} \right)V_2 &= \left(\frac{1}{R_2} + \frac{1}{R_3} \right)V_1 - I_{out} \tag{node 2} \\
+\end{align}
+
+\begin{equation}
+\begin{bmatrix}
+-I_{in}\\
+\left(-\frac{1}{R_2} - \frac{1}{R_3} \right)V_2\\
+\left(\frac{1}{R_2} + \frac{1}{R_3} \right)V_2
+\end{bmatrix}
+=
+\begin{bmatrix}
+\left(-\frac{1}{R_0} - \frac{1}{R_1} \right) & \left(\frac{1}{R_0} + \frac{1}{R_1} \right) & 0\\
+\left(\frac{1}{R_0} + \frac{1}{R_1} \right) & \left(-\frac{1}{R_0} - \frac{1}{R_1} - \frac{1}{R_2} - \frac{1}{R_3}\right) & 0\\
+0 & \left(\frac{1}{R_2} + \frac{1}{R_3} \right) & - 1
+\end{bmatrix}
+\begin{bmatrix}
+V_0\\
+V_1\\
+I_{out}
+\end{bmatrix}
+\end{equation}
+
+At this stage, note how messy the equations are. Going forward, modelling involving the reciprocal of a value will instead use an inverse quantity. In the case of electrical resistance $R$ [V/A], it can be replaced with conductance $G$ [A/V]. The equations are now:
+
+\begin{equation}
+\begin{bmatrix}
+-I_{in}\\
+\left(-G_2 - G_3 \right)V_2\\
+\left(G_2 + G_3 \right)V_2
+\end{bmatrix}
+=
+\begin{bmatrix}
+\left(-G_0 - G_1 \right) & \left(G_0 + G_1 \right) & 0\\
+\left(G_0 + G_1 \right) & \left(-G_0 - G_1 - G_2 - G_3\right) & 0\\
+0 & \left(G_2 + G_3 \right) & - 1
+\end{bmatrix}
+\begin{bmatrix}
+V_0\\
+V_1\\
+I_{out}
+\end{bmatrix}
+\end{equation}
+
+\subsection{Complex Network}
+Let's say you are faced with a complex network like the following, and you want to solve for $V_{n5}$.
+
+\begin{figure}[h!]
+	\centering
+	\includegraphics[width=0.9\linewidth]{ResistorNetwork_2.png}
+  	\caption{Complex resistor network.}
+  	\label{fig:ResistorNetwork_1}
+\end{figure}
+
+This is no longer trivial to solve like the last example. It is possible to write out the equations for the first few nodes and see that there is a general form. See \texttt{GeneralCaseDerivation.pdf} for a thermal network where each node is joined by a thermal conductance and has a thermal capacitance. The most general case for an electrical network like this is a conductance matrix $\textbf{G}$, a voltage input matrix $\textbf{U}$, and a current input matrix $\textbf{J}$.
+
+Put the matrix definitions here...
+
+Generation of $\textbf{G}$, $\textbf{U}$, and $\textbf{J}$ can be automated using 
+
+\subsection{Change to Complex Network}
+Fill
+
+\newpage
+\section{Example 1}
+This is the code used to generate the graphs above.
+
+\end{document}
